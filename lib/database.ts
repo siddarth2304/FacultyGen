@@ -6,6 +6,9 @@ interface TimeSlot {
   time: string
   subject: string
   class: string
+  isLab?: boolean
+  labHour?: number
+  totalLabHours?: number
 }
 
 export interface Faculty {
@@ -149,6 +152,46 @@ export function processUploadedData(data: any): void {
     })
   })
 
+  // Define valid time slots to ensure labs don't exceed 4pm
+  const validTimeSlots = ["9:00-10:00", "10:00-11:00", "11:10-12:10", "1:00-2:00", "2:00-3:00", "3:00-4:00"]
+
+  // Helper function to process lab subjects with batch information
+  function processLabSubjects(subjectText, facultyText) {
+    // Check if we have a split lab (Lab1/Lab2 format)
+    if (subjectText.includes("/")) {
+      const subjects = subjectText.split("/").map((s) => s.trim())
+      const faculty = facultyText.split(",").map((f) => f.trim())
+
+      // Determine how many faculty per lab (assuming equal distribution)
+      const facultyPerLab = Math.floor(faculty.length / subjects.length)
+
+      const result = []
+
+      for (let i = 0; i < subjects.length; i++) {
+        const labSubject = subjects[i]
+        // Get faculty for this lab
+        const startIdx = i * facultyPerLab
+        const endIdx = startIdx + facultyPerLab
+        const labFaculty = faculty.slice(startIdx, endIdx).join(", ")
+
+        result.push({
+          subject: labSubject,
+          faculty: labFaculty,
+        })
+      }
+
+      return result
+    }
+
+    // If not a split lab, return as is
+    return [
+      {
+        subject: subjectText,
+        faculty: facultyText,
+      },
+    ]
+  }
+
   // Process timetable data to assign time slots to faculty
   classData.forEach((cls) => {
     if (cls.timetable) {
@@ -156,16 +199,140 @@ export function processUploadedData(data: any): void {
         if (!slots) return
 
         Object.entries(slots).forEach(([time, details]) => {
-          if (!details) return
+          if (!details || !details.subject) return
 
-          const facultyName = details.faculty
-          if (facultyName && uniqueFaculties.has(facultyName)) {
-            const faculty = uniqueFaculties.get(facultyName)
-            faculty.timeSlots.push({
-              day,
-              time,
-              subject: details.subject,
-              class: cls.name,
+          // Check if this is a lab session with batch rotation
+          if (details.subject.includes("LAB") && details.subject.includes("/")) {
+            const labDetails = processLabSubjects(details.subject, details.faculty || "")
+
+            // Process each lab separately
+            labDetails.forEach((lab) => {
+              const isLab = lab.subject.includes("LAB")
+
+              // Get the faculty names for this lab
+              const facultyNames = lab.faculty
+                ? lab.faculty
+                    .split(",")
+                    .map((name) => name.trim())
+                    .filter((name) => name)
+                : []
+
+              // For each faculty assigned to this lab
+              facultyNames.forEach((facultyName) => {
+                if (facultyName && uniqueFaculties.has(facultyName)) {
+                  const faculty = uniqueFaculties.get(facultyName)
+
+                  // Extract batch information if present
+                  let subject = lab.subject
+                  let batchInfo = ""
+
+                  if (subject.includes("(B1)") || subject.includes("(B2)")) {
+                    const batchMatch = subject.match(/$$(B[12])$$/)
+                    if (batchMatch) {
+                      batchInfo = batchMatch[1]
+                      subject = subject.replace(/$$B[12]$$/, "").trim()
+                    }
+                  }
+
+                  // For labs, create entries for all hours (up to 3 hours)
+                  if (isLab) {
+                    // Find the index of the current time slot
+                    const timeIndex = validTimeSlots.findIndex((ts) => ts === time)
+
+                    if (timeIndex !== -1) {
+                      // Determine how many lab hours we can add (max 3, but don't exceed available slots)
+                      const maxLabHours = Math.min(3, validTimeSlots.length - timeIndex)
+
+                      // Create a slot for each hour of the lab
+                      for (let hour = 0; hour < maxLabHours; hour++) {
+                        if (timeIndex + hour < validTimeSlots.length) {
+                          const labTimeSlot = validTimeSlots[timeIndex + hour]
+
+                          faculty.timeSlots.push({
+                            day,
+                            time: labTimeSlot,
+                            subject: subject + (batchInfo ? ` (${batchInfo})` : ""),
+                            class: cls.name,
+                            isLab: true,
+                            labHour: hour + 1,
+                            totalLabHours: maxLabHours,
+                          })
+                        }
+                      }
+                    }
+                  }
+                }
+              })
+            })
+          } else {
+            // Regular processing for non-split subjects
+            // Check if this is a lab session (labs typically have "LAB" in their name)
+            const isLab = details.subject.includes("LAB")
+
+            // Get the faculty names for this slot
+            const facultyNames = details.faculty
+              ? details.faculty
+                  .split(",")
+                  .map((name) => name.trim())
+                  .filter((name) => name)
+              : []
+
+            // For each faculty assigned to this slot
+            facultyNames.forEach((facultyName) => {
+              if (facultyName && uniqueFaculties.has(facultyName)) {
+                const faculty = uniqueFaculties.get(facultyName)
+
+                // Extract batch information if present (e.g., "OOPJ LAB(B1)")
+                let subject = details.subject
+                let batchInfo = ""
+
+                if (subject.includes("(B1)") || subject.includes("(B2)")) {
+                  // Extract batch info from subject
+                  const batchMatch = subject.match(/$$(B[12])$$/)
+                  if (batchMatch) {
+                    batchInfo = batchMatch[1]
+                    // Clean up subject name
+                    subject = subject.replace(/$$B[12]$$/, "").trim()
+                  }
+                }
+
+                // For labs, create entries for all hours (up to 3 hours)
+                if (isLab) {
+                  // Find the index of the current time slot
+                  const timeIndex = validTimeSlots.findIndex((ts) => ts === time)
+
+                  if (timeIndex !== -1) {
+                    // Determine how many lab hours we can add (max 3, but don't exceed available slots)
+                    const maxLabHours = Math.min(3, validTimeSlots.length - timeIndex)
+
+                    // Create a slot for each hour of the lab
+                    for (let hour = 0; hour < maxLabHours; hour++) {
+                      if (timeIndex + hour < validTimeSlots.length) {
+                        const labTimeSlot = validTimeSlots[timeIndex + hour]
+
+                        faculty.timeSlots.push({
+                          day,
+                          time: labTimeSlot,
+                          subject: subject + (batchInfo ? ` (${batchInfo})` : ""),
+                          class: cls.name,
+                          isLab: true,
+                          labHour: hour + 1,
+                          totalLabHours: maxLabHours,
+                        })
+                      }
+                    }
+                  }
+                } else {
+                  // Regular class (not a lab)
+                  faculty.timeSlots.push({
+                    day,
+                    time,
+                    subject: details.subject,
+                    class: cls.name,
+                    isLab: false,
+                  })
+                }
+              }
             })
           }
         })

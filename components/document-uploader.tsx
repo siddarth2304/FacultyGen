@@ -81,9 +81,18 @@ export function DocumentUploader({ onUploadComplete }: DocumentUploaderProps) {
                 "9:00-10:00": { subject: "OS", faculty: "Mrs. R. Mamatha" },
                 "10:00-11:00": { subject: "COA", faculty: "Mr. Ch. Sudarshan Reddy" },
                 "11:10-12:10": { subject: "SE", faculty: "Mrs. A. Jyothi" },
-                "1:00-2:00": { subject: "OOPJ LAB", faculty: "Dr. T. Divya Kumari" },
-                "2:00-3:00": { subject: "OSMP LAB", faculty: "Mr. Ch. Sudarshan Reddy" },
-                "3:00-4:00": { subject: "", faculty: "" },
+                "1:00-2:00": {
+                  subject: "OOPJ LAB(B1)/OSMP LAB(B2)",
+                  faculty: "Dr. T. Divya Kumari, Mrs. A. Jyothi, Mr. Ch. Sudarshan Reddy, Mrs. R. Mamatha",
+                },
+                "2:00-3:00": {
+                  subject: "OOPJ LAB(B1)/OSMP LAB(B2)",
+                  faculty: "Dr. T. Divya Kumari, Mrs. A. Jyothi, Mr. Ch. Sudarshan Reddy, Mrs. R. Mamatha",
+                },
+                "3:00-4:00": {
+                  subject: "OOPJ LAB(B1)/OSMP LAB(B2)",
+                  faculty: "Dr. T. Divya Kumari, Mrs. A. Jyothi, Mr. Ch. Sudarshan Reddy, Mrs. R. Mamatha",
+                },
               },
               THURSDAY: {
                 "9:00-10:00": { subject: "COA", faculty: "Mr. Ch. Sudarshan Reddy" },
